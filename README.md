@@ -24,14 +24,14 @@ Para cada patrón, sin excepción:
 1. **Versión ingenua primero**, en memoria, aunque esté mal.
 2. **Rompela vos mismo**: encontrá el caso que la hace fallar.
 3. **Arreglala**, y que el arreglo sea consecuencia del paso 2 y no de haberlo leído.
-4. **Escribí el ADR**: *"elegí X en vez de Y porque Z, y me costó W"*. Si no podés escribir esa frase, no lo tenés.
+4. **Escribí el ADR**: _"elegí X en vez de Y porque Z, y me costó W"_. Si no podés escribir esa frase, no lo tenés.
 
 ---
 
 ## 2. Estructura de Directorios
 
 ```text
-hex-processor/
+resilience-lab/
 ├── docker-compose.yml              # Infraestructura local (Redis, stub de Stripe)
 ├── Dockerfile
 ├── package.json
@@ -133,11 +133,13 @@ El recorrido de un proceso (Job) dentro del sistema se ejecuta de manera secuenc
 Cada fase es entregable por sí sola y cierra con su diagrama y su ADR. No se pasa a la siguiente sin eso.
 
 ### Fase 0 — El hexágono en frío
+
 Sin red, sin Redis, sin Express. Modelos, puertos, el caso de uso y adapters en memoria. `main.ts` cablea todo a mano.
 
 **Terminaste cuando:** el test del caso de uso corre sin levantar nada, cambiar el adapter en memoria por otro no toca una línea de `domain/` ni de `application/`, y podés defender por qué la dependencia apunta hacia adentro y cuándo esto es sobreingeniería.
 
 ### Fase 1 — Escudos de egress, en memoria
+
 Timeout, retry con backoff exponencial y jitter, circuit breaker en memoria, y el decorator que los compone. El stub de pagos es un objeto en proceso que falla y tarda a pedido.
 
 **Rompela vos:** sacá el timeout y hacé que el stub cuelgue la conexión sin responder. El breaker no abre nunca, porque nunca llega a contar un fallo. Ese experimento justifica el timeout y explica por qué va adentro del retry.
@@ -145,6 +147,7 @@ Timeout, retry con backoff exponencial y jitter, circuit breaker en memoria, y e
 **Terminaste cuando:** explicás la diferencia entre breaker y retry, por qué se usan juntos, por qué importa el jitter, y qué errores no se deben reintentar.
 
 ### Fase 2 — Ingress y ciclo de vida
+
 Express, controllers, trace ID, token bucket en memoria, DLQ en memoria, graceful shutdown, y el worker como adapter de entrada. Antes de configurar el limiter va `docs/estimaciones.md`: los números salen de ahí, no de la intuición.
 
 **Rompela vos:** levantá dos procesos en puertos distintos y tirales carga. Cada uno tiene su propio bucket, así que el límite efectivo se duplica. Ese es el momento exacto que justifica mover el estado a Redis.
@@ -152,6 +155,7 @@ Express, controllers, trace ID, token bucket en memoria, DLQ en memoria, gracefu
 **Terminaste cuando:** explicás por qué el token bucket permite ráfagas y el sliding window es más estricto, y qué hacés con los mensajes de la DLQ más allá de descartarlos.
 
 ### Fase 3 — Estado distribuido
+
 El bucket pasa a Lua atómico, el breaker a estado compartido con sincronización por Pub/Sub, y la DLQ a Redis. Dos procesos locales en puertos distintos, sin balanceador.
 
 **La decisión obligatoria:** qué pasa cuando Redis no responde. **Fail-open** deja pasar todo y arriesga martillar una dependencia muerta; **fail-closed** rechaza todo y convierte un Redis caído en una caída total. Hay que elegir, y el ADR es la entrega.
@@ -159,6 +163,7 @@ El bucket pasa a Lua atómico, el breaker a estado compartido con sincronizació
 **Terminaste cuando:** explicás por qué `GET` + `SET` desde Node no es atómico y el script Lua sí, y por qué el bucket necesita consistencia fuerte mientras el breaker tolera ser eventualmente consistente (Pub/Sub es best-effort: un proceso que estaba caído se pierde el mensaje y queda con estado viejo).
 
 ### Fase 4 — Verlo funcionar
+
 Logs estructurados con el trace ID, transiciones del breaker logueadas, y una prueba de carga que haga abrir el breaker con los dos procesos corriendo.
 
 **Terminaste cuando:** podés narrar con el trace ID el recorrido completo de un job que terminó en la DLQ, y explicar componente por componente por qué nada de este sistema sobrevive en un entorno de ejecución efímero.
@@ -171,16 +176,16 @@ Logs estructurados con el trace ID, transiciones del breaker logueadas, y una pr
 
 Planteadas como pregunta y no como respuesta: derivarlas es el ejercicio. Una por ADR.
 
-| # | Decisión | Fase |
-|---|---|---|
-| 01 | ¿En qué orden se anidan timeout, retry y breaker, y por qué ese y no otro? | 1 |
-| 02 | ¿Qué errores son reintentables y cuáles no? ¿Dónde vive ese criterio? | 1 |
-| 03 | ¿Qué variante de jitter (full, equal, decorrelated) y a cambio de qué? | 1 |
-| 04 | ¿Token bucket o sliding window para el ingress? | 2 |
-| 05 | ¿Qué garantía de entrega ofrece el procesador y dónde queda la ventana de duplicado? | 2 |
-| 06 | ¿Fail-open o fail-closed cuando Redis no responde? | 3 |
-| 07 | ¿Por qué el estado del breaker tolera ser eventualmente consistente y el del bucket no? | 3 |
-| 08 | ¿Qué umbral abre el breaker, y de qué objetivo de latencia sale ese número? | 3 |
+| #   | Decisión                                                                                | Fase |
+| --- | --------------------------------------------------------------------------------------- | ---- |
+| 01  | ¿En qué orden se anidan timeout, retry y breaker, y por qué ese y no otro?              | 1    |
+| 02  | ¿Qué errores son reintentables y cuáles no? ¿Dónde vive ese criterio?                   | 1    |
+| 03  | ¿Qué variante de jitter (full, equal, decorrelated) y a cambio de qué?                  | 1    |
+| 04  | ¿Token bucket o sliding window para el ingress?                                         | 2    |
+| 05  | ¿Qué garantía de entrega ofrece el procesador y dónde queda la ventana de duplicado?    | 2    |
+| 06  | ¿Fail-open o fail-closed cuando Redis no responde?                                      | 3    |
+| 07  | ¿Por qué el estado del breaker tolera ser eventualmente consistente y el del bucket no? | 3    |
+| 08  | ¿Qué umbral abre el breaker, y de qué objetivo de latencia sale ese número?             | 3    |
 
 ---
 
