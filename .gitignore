@@ -13,6 +13,9 @@ dist/
 redis.conf
 !redis.conf.example
 
+# Notas de trabajo — referencia personal, no forma parte del repo
+docs/internal/
+
 # Logs
 *.log
 npm-debug.log*
