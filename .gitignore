@@ -15,6 +15,7 @@ redis.conf
 
 # Notas de trabajo — referencia personal, no forma parte del repo
 docs/internal/
+docs/insights/
 
 # Logs
 *.log

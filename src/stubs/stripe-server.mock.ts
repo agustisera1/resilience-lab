@@ -1,6 +1,8 @@
 import express, { Express } from "express";
-import "dotenv/config";
 import { chargePayment, refundPayment } from "../application/services/payments";
+import { CircuitBreaker as Circuit } from "../infrastructure/egress/circuit-breaker";
+import "dotenv/config";
+import { getChargePayload } from "../application/services/adapters";
 
 const server: Express = express();
 server.use(express.json());
@@ -10,12 +12,20 @@ server.post("/charge", async (req, res) => {
 
   // headers, fields sanitization and checks here
 
-  const response = await chargePayment(body);
-  res.status(response.status);
-  if (response.ok) {
-    res.json(response.data);
+  const paymentsAvailable = Circuit.checkServiceAvailability("payments");
+  if (!paymentsAvailable) {
+    res.status(503).json({ error: "Payments service is not available" });
+    return;
+  }
+
+  const parsingResult = getChargePayload(body);
+
+  if (!parsingResult.ok) {
+    res.status(400).json({ error: parsingResult.error });
   } else {
-    res.json({ error: response.error });
+    const response = await chargePayment(parsingResult.data);
+    res.status(response.status);
+    response.ok ? res.json(response.data) : res.json({ error: response.error });
   }
 });
 

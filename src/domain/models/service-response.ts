@@ -1,6 +1,6 @@
-export type ServiceResponse<T = unknown> = Promise<
+export type ServiceResponse<D = unknown> = Promise<
   | {
-      data: T;
+      data: D;
       ok: true;
       status: number;
     }

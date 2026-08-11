@@ -1,3 +1,4 @@
+import { CircuitBreaker } from "./infrastructure/egress/circuit-breaker";
 import { server as stripeServer } from "./stubs/stripe-server.mock";
 
 const hostname = process.env.hostname;
@@ -8,6 +9,7 @@ async function init() {
     throw new Error("[init]: missing server config");
   }
 
+  CircuitBreaker.init();
   stripeServer.listen(port, hostname, () => {
     console.info("[stripe]: stub server listening on port:", port);
   });
