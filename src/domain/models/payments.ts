@@ -55,6 +55,28 @@ export type Payment = {
   metadata?: Record<string, string>;
 };
 
+// What the gateway reports back from a charge attempt. A decline is a result,
+// not an error: the call went through, the processor said no.
+// What the processor does not decide (our own id, the idempotency key, the
+// method) is absent: the caller already has it.
+export type ChargeResult =
+  | {
+      status: "charged";
+      processor_payment_id: string;
+      currency: Currency;
+      amount: string;
+      fee: string;
+      // net = amount - fee
+      net: string;
+      created_at: string;
+    }
+  | {
+      status: "failed";
+      // El procesador puede haber registrado el intento igual, o no
+      processor_payment_id: string | null;
+      failure: PaymentFailure;
+    };
+
 export type Refundable = Payment & {
   refunded: string;
   approved: boolean;

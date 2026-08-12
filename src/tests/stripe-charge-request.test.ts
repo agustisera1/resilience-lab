@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getStripeChargeRequest } from "../adapters/payments/adapters.js";
+import { getStripeChargeRequest } from "../adapters/payments/stripe-gateway.js";
 import { ChargeIntent } from "../domain/models/payments.js";
 
 function anIntent(overrides: Partial<ChargeIntent> = {}): ChargeIntent {

@@ -73,7 +73,7 @@ El error más común es mandar `"amount": 19.99` sin comillas. Va como string.
 
 | Si mandás | Respuesta |
 |---|---|
-| El body de ejemplo tal cual | `200` con el charge completo — ver abajo |
+| El body de ejemplo tal cual | `200` con el `ChargeResult` — ver abajo |
 | `"amount": 19.99` (número) | `400` `{"error":"amount must be a string"}` |
 | `"currency": "BRL"` | `400` `{"error":"currency must be one of: USD, EUR, ARS"}` |
 | `"brand": "diners"` | `400` `{"error":"method.brand must be one of: visa, mastercard, amex"}` |
@@ -88,35 +88,64 @@ Los mensajes apuntan siempre al campo exacto, con el path anidado en los de la t
 
 ```json
 {
-  "id": "ch_8ef2xghg9p",
-  "object": "charge",
-  "amount": 1999,
-  "currency": "usd",
-  "customer": "cus_123",
-  "status": "succeeded",
-  "paid": true,
-  "balance_transaction": {
-    "id": "txn_gfh6mgs8lp",
-    "amount": 1999,
-    "fee": 88,
-    "net": 1911
-  }
+  "status": "charged",
+  "processor_payment_id": "ch_8ef2xghg9p",
+  "currency": "USD",
+  "amount": "19.99",
+  "fee": "0.88",
+  "net": "19.11",
+  "created_at": "2026-08-12T14:31:07.000Z"
 }
 ```
 
-Recortado: la respuesta real trae también `captured`, `created`, `livemode`, `payment_method_details` y `metadata`.
+Esto ya **no** es la respuesta de Stripe: es un `ChargeResult`, un modelo del dominio. El adapter traduce y nada del formato del procesador sobrevive a ese cruce.
 
-Dos cosas que confunden al leerla:
+Si venís de la versión anterior de este doc, cambió todo lo que se veía raro:
 
-- **Los montos vienen en unidades menores.** Mandaste `"19.99"` y te vuelve `1999`. El procesador trabaja en centavos.
-- **El `fee` y el `net` no son tuyos.** Los calcula el procesador (2.9% + 30) y los reporta en `balance_transaction`: `1999 - 88 = 1911` es lo que realmente cobrás.
+- **Los montos vuelven en unidades mayores**, como strings decimales. Mandaste `"19.99"` y te vuelve `"19.99"`, no `1999`. Los centavos mueren en el adapter.
+- **`currency` vuelve en mayúscula** (`USD`), aunque el procesador la devuelva en minúscula.
+- **`fee` y `net` están al mismo nivel**, ya no anidados en `balance_transaction`. Los sigue calculando el procesador (2.9% + 30): `19.99 - 0.88 = 19.11` es lo que realmente cobrás.
+- **No hay `id`, `object`, `paid`, `captured` ni `livemode`.** El id del procesador viaja como `processor_payment_id`, el resto no le interesa a tu dominio.
 
 ## Forzar los caminos de error
 
 | Cambio en el body | Respuesta |
 |---|---|
-| `last4` a `"0002"` | `402` `{"error":"Card declined"}` — tarjeta rechazada, imita las de prueba de Stripe |
+| `last4` a `"0002"` | `402` con un `ChargeResult` `failed` — ver abajo |
 | `exp_year` a `2020` | `422` — tarjeta vencida, la corta tu validación de negocio |
 | `amount` a `"50"` con `currency` `"ARS"` | `422` — abajo del mínimo de 100 ARS |
 
-Los dos `422` hoy devuelven `{"error":"undefined"}`: el mensaje se arma con un `forEach` en `chargePayment` y `forEach` no devuelve nada. El status sí es correcto.
+**La tarjeta rechazada** ya no devuelve un `{"error": ...}`. Devuelve el resultado completo, porque un rechazo es un resultado y no un error:
+
+```json
+{
+  "status": "failed",
+  "processor_payment_id": "ch_2k9xmqv1ab",
+  "failure": {
+    "code": "card_declined",
+    "message": "Your card was declined.",
+    "retryable": false
+  }
+}
+```
+
+**Los `422` ya devuelven el detalle.** El `{"error":"undefined"}` era un `forEach` que no retornaba nada; ahora las violaciones viajan como array y salen todas juntas, no solo la primera:
+
+```json
+{
+  "error": [
+    { "rule": "card_expired", "message": "card expired on 12/2020" }
+  ]
+}
+```
+
+Mandá `exp_year: 2020` **y** `amount: "50"` con `ARS` en la misma request y vas a ver las dos reglas en el array. Ojo con la diferencia: el `400` de parseo corta en el primer campo malo, el `422` de negocio evalúa todas las reglas.
+
+## Los dos 503
+
+| Caso | Cómo se dispara |
+|---|---|
+| El procesador no contesta (5xx o timeout) | El gateway tira, el handler responde `503`. El detalle queda en la consola, no en la respuesta |
+| El breaker corta el paso | Requiere estado `OPEN` en `payments` |
+
+Ninguno de los dos es alcanzable desde Postman todavía: el stub siempre contesta y el breaker arranca en `CLOSED` y nunca transiciona. Para verlos hay que forzar el stub a devolver 503 a mano.

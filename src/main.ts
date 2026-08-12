@@ -1,5 +1,6 @@
+import { StripeGateway } from "./adapters/payments/stripe-gateway";
 import { CircuitBreaker } from "./infrastructure/egress/circuit-breaker";
-import { server as stripeServer } from "./stubs/stripe-server.mock";
+import { createServer } from "./stubs/stripe-server.mock";
 
 const hostname = process.env.hostname;
 const port = Number(process.env.port);
@@ -10,6 +11,7 @@ async function init() {
   }
 
   CircuitBreaker.init();
+  const stripeServer = createServer(new StripeGateway());
   stripeServer.listen(port, hostname, () => {
     console.info("[stripe]: stub server listening on port:", port);
   });
