@@ -24,6 +24,7 @@ server.post("/charge", async (req, res) => {
     res.status(400).json({ error: parsingResult.error });
   } else {
     const response = await chargePayment(parsingResult.data);
+    console.log(response);
     res.status(response.status);
     response.ok ? res.json(response.data) : res.json({ error: response.error });
   }

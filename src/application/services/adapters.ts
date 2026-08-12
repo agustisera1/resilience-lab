@@ -4,6 +4,7 @@ import {
   Currency,
   PaymentMethod,
 } from "../../domain/models/payments";
+import { StripeChargeRequest } from "../../stubs/stripe-api.mock";
 
 export type ParsedPayload<T> =
   | { ok: true; data: T }
@@ -113,6 +114,30 @@ function getPaymentMethod(value: unknown): PaymentMethod {
     exp_month: integer(method.exp_month, "method.exp_month", 1, 12),
     exp_year: integer(method.exp_year, "method.exp_year", 2000, 2099),
     holder: text(method.holder, "method.holder"),
+  };
+}
+
+// Domain amounts are decimal strings, the processor wants integer minor units.
+// The rounding is not cosmetic: Number("19.99") * 100 is 1998.9999999999998
+function toMinorUnits(amount: string): number {
+  return Math.round(Number(amount) * 100);
+}
+
+export function getStripeChargePayload(
+  intent: ChargeIntent,
+): StripeChargeRequest {
+  return {
+    amount: toMinorUnits(intent.amount),
+    currency: intent.currency,
+    customer: intent.customer_id,
+    description: intent.description,
+    metadata: intent.metadata,
+    card: {
+      brand: intent.method.brand,
+      last4: intent.method.last4,
+      exp_month: intent.method.exp_month,
+      exp_year: intent.method.exp_year,
+    },
   };
 }
 

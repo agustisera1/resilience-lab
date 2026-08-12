@@ -126,6 +126,7 @@ class Stripe {
         },
       };
 
+      console.error(JSON.stringify(error));
       return json(error, 400, "Invalid request");
     }
 

@@ -1,4 +1,5 @@
 import { ChargeIntent, Payment } from "../../domain/models/payments.js";
+import { getStripeChargePayload } from "./adapters.js";
 import { ServiceResponse } from "../../domain/models/service-response.js";
 import { validateCharge } from "../../domain/validations/payments.js";
 import { StripeAPI, StripeCharge } from "../../stubs/stripe-api.mock.js";
@@ -16,8 +17,8 @@ export async function chargePayment(
     };
   }
 
-  const response = await StripeAPI.charge(chargeIntent);
-
+  const data = getStripeChargePayload(chargeIntent); // Use an adapter for the service
+  const response = await StripeAPI.charge(data);
   if (response.ok) {
     return {
       ok: true,
