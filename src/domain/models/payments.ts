@@ -77,6 +77,35 @@ export type ChargeResult =
       failure: PaymentFailure;
     };
 
+// Mirrors ChargeIntent: only what the caller owns. The currency and the method
+// are not here, the payment being refunded already fixed them.
+export type RefundIntent = {
+  idempotency_key: string;
+  payment_id: string;
+  // null means the whole refundable balance
+  amount: string | null;
+  reason: string | null;
+  metadata?: Record<string, string>;
+};
+
+// Same shape of contract as ChargeResult: a rejected refund is a result, not
+// an error. amount is what this refund moved; what is left refundable is the
+// payment's business, the processor does not report it here.
+export type RefundResult =
+  | {
+      status: "refunded";
+      processor_refund_id: string;
+      processor_payment_id: string;
+      currency: Currency;
+      amount: string;
+      created_at: string;
+    }
+  | {
+      status: "failed";
+      processor_refund_id: string | null;
+      failure: PaymentFailure;
+    };
+
 export type Refundable = Payment & {
   refunded: string;
   approved: boolean;

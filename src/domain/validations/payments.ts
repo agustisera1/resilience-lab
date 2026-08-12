@@ -1,9 +1,11 @@
-import { ChargeIntent, Currency } from "@/domain/models/payments";
+import { ChargeIntent, Currency, RefundIntent } from "@/domain/models/payments";
 
 export type RuleCode =
   | "card_expired"
   | "amount_below_minimum"
-  | "amount_above_maximum";
+  | "amount_above_maximum"
+  | "refund_amount_invalid"
+  | "refund_amount_not_positive";
 
 export type RuleViolation = {
   rule: RuleCode;
@@ -11,6 +13,10 @@ export type RuleViolation = {
 };
 
 export type ChargeValidation =
+  | { valid: true }
+  | { valid: false; violations: RuleViolation[] };
+
+export type RefundValidation =
   | { valid: true }
   | { valid: false; violations: RuleViolation[] };
 
@@ -66,6 +72,44 @@ export function checkAmountLimits(intent: ChargeIntent): RuleViolation | null {
   }
 
   return null;
+}
+
+// A null amount is a full refund: there is nothing to check on the intent
+// alone, the balance is the payment's business.
+export function checkRefundAmount(intent: RefundIntent): RuleViolation | null {
+  if (intent.amount === null) {
+    return null;
+  }
+
+  const amount = Number(intent.amount);
+
+  if (!Number.isFinite(amount)) {
+    return {
+      rule: "refund_amount_invalid",
+      message: `amount "${intent.amount}" is not a number`,
+    };
+  }
+
+  if (amount <= 0) {
+    return {
+      rule: "refund_amount_not_positive",
+      message: "amount must be greater than zero",
+    };
+  }
+
+  return null;
+}
+
+export function validateRefund(intent: RefundIntent): RefundValidation {
+  const violations = [checkRefundAmount(intent)].filter(
+    (violation): violation is RuleViolation => violation !== null,
+  );
+
+  if (violations.length > 0) {
+    return { valid: false, violations };
+  }
+
+  return { valid: true };
 }
 
 export function validateCharge(

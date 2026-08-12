@@ -1,11 +1,13 @@
 import {
   ChargeIntent,
   ChargeResult,
-  Payment,
+  RefundIntent,
+  RefundResult,
 } from "@/domain/models/payments";
 import {
   RuleViolation,
   validateCharge,
+  validateRefund,
 } from "@/domain/validations/payments";
 import { PaymentsGateway } from "@/domain/ports/payments-gateway";
 
@@ -27,9 +29,19 @@ export async function chargePayment(
   return await gateway.charge(intent);
 }
 
+export type RefundPaymentResult =
+  | RefundResult
+  | { status: "invalid"; violations: RuleViolation[] };
+
 export async function refundPayment(
-  payment: Payment,
+  intent: RefundIntent,
   gateway: PaymentsGateway,
-) {
-  return gateway.refund(payment);
+): Promise<RefundPaymentResult> {
+  const validation = validateRefund(intent);
+
+  if (!validation.valid) {
+    return { status: "invalid", violations: validation.violations };
+  }
+
+  return await gateway.refund(intent);
 }

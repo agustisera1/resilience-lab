@@ -64,6 +64,11 @@ export function money(value: unknown, field: string): string {
   return raw;
 }
 
+export function optionalMoney(value: unknown, field: string): string | null {
+  if (value === undefined || value === null) return null;
+  return money(value, field);
+}
+
 export function optionalText(value: unknown, field: string): string | null {
   if (value === undefined || value === null) return null;
   return text(value, field);

@@ -53,6 +53,39 @@ export type StripeCharge = {
   metadata: Record<string, string>;
 };
 
+// The currency is not asked for: it comes from the charge, like in the real
+// API. An absent amount means the whole balance left on it
+export type StripeRefundRequest = {
+  charge: string;
+  amount?: number;
+  reason?: string | null;
+  metadata?: Record<string, string>;
+};
+
+export type StripeRefund = {
+  id: string;
+  object: "refund";
+  amount: number;
+  charge: string;
+  currency: string;
+  reason: string | null;
+  status: "succeeded";
+  created: number;
+  livemode: boolean;
+  // The money leaves the balance, so it is reported negative. The fee of the
+  // original charge is not given back: that is why fee is 0 and net is -amount.
+  balance_transaction: {
+    id: string;
+    object: "balance_transaction";
+    amount: number;
+    fee: number;
+    net: number;
+    currency: string;
+    created: number;
+  };
+  metadata: Record<string, string>;
+};
+
 export type StripeErrorBody = {
   error: {
     type: "invalid_request_error" | "card_error";
@@ -71,6 +104,10 @@ const PAYOUT_DELAY = 60 * 60 * 24 * 2;
 
 // Test card: any card ending in 0002 gets declined, like Stripe's magic numbers
 const DECLINED_LAST4 = "0002";
+
+// A refund needs to know the charge it is undoing: its currency, and how much
+// of it is still there. Lives as long as the process, which is enough for a stub
+const charges = new Map<string, StripeCharge>();
 
 function token(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 12)}`;
@@ -177,24 +214,110 @@ class Stripe {
       metadata: body.metadata ?? {},
     };
 
+    charges.set(charge.id, charge);
+
     return json(charge, 200, "Payment charged");
   }
 
-  async refund(payment: unknown) {
-    this.check();
+  async refund(request: unknown) {
+    const unavailable = this.check();
+    if (unavailable) return unavailable;
+
     await delay();
-    const refund = {
-      ...(payment as Record<string, unknown>),
-      refunded: new Date().toLocaleDateString(),
-      approved: true,
-      deposit: false,
+
+    const body = request as Partial<StripeRefundRequest> | null;
+    const { amount } = body ?? {};
+
+    if (
+      typeof body?.charge !== "string" ||
+      (amount !== undefined &&
+        (typeof amount !== "number" || !Number.isInteger(amount) || amount <= 0))
+    ) {
+      const error: StripeErrorBody = {
+        error: {
+          type: "invalid_request_error",
+          code: "parameter_invalid",
+          message:
+            "charge is required, and amount must be a positive integer in minor units when present",
+        },
+      };
+
+      console.error(JSON.stringify(error));
+      return json(error, 400, "Invalid request");
+    }
+
+    const charge = charges.get(body.charge);
+
+    if (!charge) {
+      const error: StripeErrorBody = {
+        error: {
+          type: "invalid_request_error",
+          code: "resource_missing",
+          message: `No such charge: '${body.charge}'`,
+          charge: body.charge,
+        },
+      };
+
+      return json(error, 404, "No such charge");
+    }
+
+    const refundable = charge.amount - charge.amount_refunded;
+
+    if (refundable === 0) {
+      const error: StripeErrorBody = {
+        error: {
+          type: "invalid_request_error",
+          code: "charge_already_refunded",
+          message: `Charge ${charge.id} has already been refunded.`,
+          charge: charge.id,
+        },
+      };
+
+      return json(error, 400, "Charge already refunded");
+    }
+
+    // No amount given is a full refund: whatever is left on the charge
+    const refunded = amount ?? refundable;
+
+    if (refunded > refundable) {
+      const error: StripeErrorBody = {
+        error: {
+          type: "invalid_request_error",
+          code: "amount_too_large",
+          message: `Refund amount (${refunded}) is greater than the ${refundable} left on charge ${charge.id}.`,
+          charge: charge.id,
+        },
+      };
+
+      return json(error, 400, "Amount too large");
+    }
+
+    const created = Math.floor(Date.now() / 1000);
+    charge.amount_refunded += refunded;
+
+    const refund: StripeRefund = {
+      id: token("re"),
+      object: "refund",
+      amount: refunded,
+      charge: charge.id,
+      currency: charge.currency,
+      reason: body.reason ?? null,
+      status: "succeeded",
+      created,
+      livemode: false,
+      balance_transaction: {
+        id: token("txn"),
+        object: "balance_transaction",
+        amount: -refunded,
+        fee: 0,
+        net: -refunded,
+        currency: charge.currency,
+        created,
+      },
+      metadata: body.metadata ?? {},
     };
 
-    return new Response(JSON.stringify(refund), {
-      status: 201,
-      statusText: "Refund made",
-      headers,
-    });
+    return json(refund, 200, "Refund made");
   }
 }
 
