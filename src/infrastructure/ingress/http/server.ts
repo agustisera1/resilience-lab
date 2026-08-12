@@ -1,9 +1,9 @@
 import express, { Express } from "express";
-import { chargePayment } from "../application/services/payments";
-import { CircuitBreaker as Circuit } from "../infrastructure/egress/circuit-breaker";
+import { chargePayment } from "@/application/services/payments";
+import { CircuitBreaker as Circuit } from "@/infrastructure/egress/circuit-breaker";
 import "dotenv/config";
-import { getChargePayload } from "../adapters/payments/charge-payload";
-import { PaymentsGateway } from "../ports/payments-gateway";
+import { getChargePayload } from "@/domain/parsing/charge-payload";
+import { PaymentsGateway } from "@/domain/ports/payments-gateway";
 
 export function createServer(gateway: PaymentsGateway) {
   const server: Express = express();

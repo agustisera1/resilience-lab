@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { getStripeChargeRequest } from "../adapters/payments/stripe-gateway.js";
-import { ChargeIntent } from "../domain/models/payments.js";
+import { getStripeChargePayload } from "@/infrastructure/egress/adapters/payments/stripe-gateway";
+import { ChargeIntent } from "@/domain/models/payments";
 
 function anIntent(overrides: Partial<ChargeIntent> = {}): ChargeIntent {
   return {
@@ -22,9 +22,9 @@ function anIntent(overrides: Partial<ChargeIntent> = {}): ChargeIntent {
   };
 }
 
-describe("getStripeChargeRequest", () => {
+describe("getStripeChargePayload", () => {
   it("renames the fields the processor spells differently", () => {
-    expect(getStripeChargeRequest(anIntent())).toEqual({
+    expect(getStripeChargePayload(anIntent())).toEqual({
       amount: 1999,
       currency: "USD",
       customer: "cus_123",
@@ -41,22 +41,22 @@ describe("getStripeChargeRequest", () => {
 
   it("converts amounts to integer minor units without float drift", () => {
     // Number("19.99") * 100 is 1998.9999999999998 without the rounding
-    expect(getStripeChargeRequest(anIntent({ amount: "19.99" })).amount).toBe(
+    expect(getStripeChargePayload(anIntent({ amount: "19.99" })).amount).toBe(
       1999,
     );
-    expect(getStripeChargeRequest(anIntent({ amount: "0.29" })).amount).toBe(
+    expect(getStripeChargePayload(anIntent({ amount: "0.29" })).amount).toBe(
       29,
     );
-    expect(getStripeChargeRequest(anIntent({ amount: "1.10" })).amount).toBe(
+    expect(getStripeChargePayload(anIntent({ amount: "1.10" })).amount).toBe(
       110,
     );
-    expect(getStripeChargeRequest(anIntent({ amount: "100" })).amount).toBe(
+    expect(getStripeChargePayload(anIntent({ amount: "100" })).amount).toBe(
       10000,
     );
   });
 
   it("drops the fields the processor does not accept", () => {
-    const request = getStripeChargeRequest(anIntent());
+    const request = getStripeChargePayload(anIntent());
 
     expect(request).not.toHaveProperty("idempotency_key");
     expect(request.card).not.toHaveProperty("type");

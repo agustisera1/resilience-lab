@@ -1,4 +1,4 @@
-import { ChargeIntent, Currency } from "../models/payments.js";
+import { ChargeIntent, Currency } from "@/domain/models/payments";
 
 export type RuleCode =
   | "card_expired"

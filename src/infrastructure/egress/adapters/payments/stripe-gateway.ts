@@ -3,15 +3,15 @@ import {
   ChargeResult,
   Currency,
   Payment,
-} from "../../domain/models/payments";
-import { PaymentsGateway } from "../../ports/payments-gateway";
+} from "@/domain/models/payments";
+import { PaymentsGateway } from "@/domain/ports/payments-gateway";
 import {
   StripeAPI,
   StripeCharge,
   StripeChargeRequest,
   StripeErrorBody,
-} from "../../stubs/stripe-api.mock";
-import { toMajorUnits, toMinorUnits } from "./lib";
+} from "@/stubs/stripe-api.mock";
+import { toMajorUnits, toMinorUnits } from "./money";
 
 export function getStripeChargePayload(
   intent: ChargeIntent,

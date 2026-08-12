@@ -1,6 +1,6 @@
-import { StripeGateway } from "./adapters/payments/stripe-gateway";
+import { StripeGateway } from "./infrastructure/egress/adapters/payments/stripe-gateway";
 import { CircuitBreaker } from "./infrastructure/egress/circuit-breaker";
-import { createServer } from "./stubs/stripe-server.mock";
+import { createServer } from "./infrastructure/ingress/http/server";
 
 const hostname = process.env.hostname;
 const port = Number(process.env.port);

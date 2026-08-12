@@ -1,4 +1,4 @@
-import { ChargeIntent, PaymentMethod } from "../../domain/models/payments";
+import { ChargeIntent, PaymentMethod } from "@/domain/models/payments";
 import {
   CARD_BRANDS,
   CURRENCIES,

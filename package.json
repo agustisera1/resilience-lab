@@ -7,7 +7,7 @@
     "dev": "tsx watch src/main.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "build": "tsc",
+    "build": "tsc && tsc-alias",
     "start": "node dist/main.js"
   },
   "author": "Agustín Tisera",
@@ -17,6 +17,7 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^26.2.0",
+    "tsc-alias": "^1.9.1",
     "tsx": "^4.23.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"

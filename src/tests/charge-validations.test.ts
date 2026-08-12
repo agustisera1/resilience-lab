@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { ChargeIntent } from "../domain/models/payments.js";
+import { ChargeIntent } from "@/domain/models/payments";
 import {
   checkAmountLimits,
   checkCardExpiry,
   validateCharge,
-} from "../domain/validations/payments.js";
+} from "@/domain/validations/payments";
 
 // Local time on purpose: the rule reads getFullYear/getMonth
 const NOW = new Date(2026, 7, 11); // August 11th, 2026

@@ -2,12 +2,12 @@ import {
   ChargeIntent,
   ChargeResult,
   Payment,
-} from "../../domain/models/payments.js";
+} from "@/domain/models/payments";
 import {
   RuleViolation,
   validateCharge,
-} from "../../domain/validations/payments.js";
-import { PaymentsGateway } from "../../ports/payments-gateway.js";
+} from "@/domain/validations/payments";
+import { PaymentsGateway } from "@/domain/ports/payments-gateway";
 
 // What the processor can answer, plus what never got as far as asking it
 export type ChargePaymentResult =
