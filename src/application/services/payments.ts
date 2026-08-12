@@ -1,41 +1,47 @@
-import { ServiceResponse } from "../../domain/models/response.model.js";
-import { StripeAPI } from "../../stubs/stripe-api.mock.js";
-import type { Payment } from "../../stubs/stripe-api.mock.js";
+import {
+  ChargeIntent,
+  ChargeResult,
+  RefundIntent,
+  RefundResult,
+} from "@/domain/models/payments";
+import {
+  RuleViolation,
+  validateCharge,
+  validateRefund,
+} from "@/domain/validations/payments";
+import { PaymentsGateway } from "@/domain/ports/payments-gateway";
+
+// What the processor can answer, plus what never got as far as asking it
+export type ChargePaymentResult =
+  | ChargeResult
+  | { status: "invalid"; violations: RuleViolation[] };
 
 export async function chargePayment(
-  payment: Payment,
-): Promise<ServiceResponse> {
-  const response = await StripeAPI.charge(payment);
+  intent: ChargeIntent,
+  gateway: PaymentsGateway,
+): Promise<ChargePaymentResult> {
+  const validation = validateCharge(intent);
 
-  if (response.ok) {
-    return {
-      ok: true,
-      data: await response.json(),
-      status: response.status,
-    };
-  } else {
-    return {
-      ok: false,
-      error: response.statusText,
-      status: response.status,
-    };
+  if (!validation.valid) {
+    return { status: "invalid", violations: validation.violations };
   }
+
+  return await gateway.charge(intent);
 }
 
-export async function refundPayment(payment: Payment) {
-  const response = await StripeAPI.refund(payment);
+export type RefundPaymentResult =
+  | RefundResult
+  | { status: "invalid"; violations: RuleViolation[] };
 
-  if (response.ok) {
-    return {
-      ok: true,
-      data: await response.json(),
-      status: response.status,
-    };
-  } else {
-    return {
-      ok: false,
-      error: response.statusText,
-      status: response.status,
-    };
+export async function refundPayment(
+  intent: RefundIntent,
+  gateway: PaymentsGateway,
+): Promise<RefundPaymentResult> {
+  const validation = validateRefund(intent);
+
+  if (!validation.valid) {
+    return { status: "invalid", violations: validation.violations };
   }
+
+  return await gateway.refund(intent);
 }
