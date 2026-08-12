@@ -2,7 +2,7 @@ import express, { Express } from "express";
 import { chargePayment, refundPayment } from "../application/services/payments";
 import { CircuitBreaker as Circuit } from "../infrastructure/egress/circuit-breaker";
 import "dotenv/config";
-import { getChargePayload } from "../application/services/adapters";
+import { getChargePayload } from "../adapters/payments/adapters";
 
 const server: Express = express();
 server.use(express.json());

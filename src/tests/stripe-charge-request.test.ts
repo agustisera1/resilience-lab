@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getStripeChargeRequest } from "../application/services/adapters.js";
+import { getStripeChargeRequest } from "../adapters/payments/adapters.js";
 import { ChargeIntent } from "../domain/models/payments.js";
 
 function anIntent(overrides: Partial<ChargeIntent> = {}): ChargeIntent {
@@ -41,10 +41,18 @@ describe("getStripeChargeRequest", () => {
 
   it("converts amounts to integer minor units without float drift", () => {
     // Number("19.99") * 100 is 1998.9999999999998 without the rounding
-    expect(getStripeChargeRequest(anIntent({ amount: "19.99" })).amount).toBe(1999);
-    expect(getStripeChargeRequest(anIntent({ amount: "0.29" })).amount).toBe(29);
-    expect(getStripeChargeRequest(anIntent({ amount: "1.10" })).amount).toBe(110);
-    expect(getStripeChargeRequest(anIntent({ amount: "100" })).amount).toBe(10000);
+    expect(getStripeChargeRequest(anIntent({ amount: "19.99" })).amount).toBe(
+      1999,
+    );
+    expect(getStripeChargeRequest(anIntent({ amount: "0.29" })).amount).toBe(
+      29,
+    );
+    expect(getStripeChargeRequest(anIntent({ amount: "1.10" })).amount).toBe(
+      110,
+    );
+    expect(getStripeChargeRequest(anIntent({ amount: "100" })).amount).toBe(
+      10000,
+    );
   });
 
   it("drops the fields the processor does not accept", () => {

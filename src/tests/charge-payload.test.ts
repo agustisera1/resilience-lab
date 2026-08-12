@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getChargePayload } from "../application/services/adapters.js";
+import { getChargePayload } from "../adapters/payments/adapters.js";
 
 function aBody(overrides: Record<string, unknown> = {}) {
   return {

@@ -1,5 +1,5 @@
 import { ChargeIntent, Payment } from "../../domain/models/payments.js";
-import { getStripeChargePayload } from "./adapters.js";
+import { getStripeChargePayload } from "../../adapters/payments/adapters.js";
 import { ServiceResponse } from "../../domain/models/service-response.js";
 import { validateCharge } from "../../domain/validations/payments.js";
 import { StripeAPI, StripeCharge } from "../../stubs/stripe-api.mock.js";
