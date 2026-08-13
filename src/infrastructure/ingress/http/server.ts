@@ -1,6 +1,6 @@
 import express, { Express } from "express";
 import { chargePayment, refundPayment } from "@/application/services/payments";
-import { CircuitBreaker as Circuit } from "@/infrastructure/egress/circuit-breaker";
+import { CircuitBreaker as Circuit } from "@/infrastructure/egress/circuit-breaker/circuit-breaker";
 import { getChargePayload } from "@/domain/parsing/charge-payload";
 import { PaymentsGateway } from "@/domain/ports/payments-gateway";
 import { getRefundPayload } from "@/domain/parsing/refund-payload";
@@ -11,13 +11,6 @@ export function createServer(gateway: PaymentsGateway) {
   server.use(express.json());
   server.post("/charge", async (req, res) => {
     const { body } = req;
-
-    const paymentsAvailable = Circuit.checkServiceAvailability("payments");
-
-    if (!paymentsAvailable) {
-      res.status(503).json({ error: "Payments service is not available" });
-      return;
-    }
 
     const parsingResult = getChargePayload(body);
 
@@ -50,12 +43,6 @@ export function createServer(gateway: PaymentsGateway) {
 
   server.post("/refund", async (req, res) => {
     const { body } = req;
-
-    const paymentsAvailable = Circuit.checkServiceAvailability("payments");
-    if (!paymentsAvailable) {
-      res.status(503).json({ error: "Payments service is not available" });
-      return;
-    }
 
     const parsingResult = getRefundPayload(body);
 

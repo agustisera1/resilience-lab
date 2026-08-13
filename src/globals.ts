@@ -1,4 +1,4 @@
-import { CircuitBreaker } from "./infrastructure/egress/circuit-breaker";
+import { CircuitBreaker } from "./infrastructure/egress/circuit-breaker/circuit-breaker";
 import { StripeMockServer } from "./stubs/stripe-api.mock";
 
 declare global {

@@ -10,6 +10,7 @@ import {
   validateRefund,
 } from "@/domain/validations/payments";
 import { PaymentsGateway } from "@/domain/ports/payments-gateway";
+import { CircuitBreaker } from "@/infrastructure/egress/circuit-breaker/circuit-breaker";
 
 // What the processor can answer, plus what never got as far as asking it
 export type ChargePaymentResult =
@@ -26,7 +27,7 @@ export async function chargePayment(
     return { status: "invalid", violations: validation.violations };
   }
 
-  return await gateway.charge(intent);
+  return await CircuitBreaker.execute(async () => await gateway.charge(intent));
 }
 
 export type RefundPaymentResult =
@@ -43,5 +44,5 @@ export async function refundPayment(
     return { status: "invalid", violations: validation.violations };
   }
 
-  return await gateway.refund(intent);
+  return CircuitBreaker.execute(async () => await gateway.refund(intent));
 }

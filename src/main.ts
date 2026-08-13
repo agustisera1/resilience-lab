@@ -1,5 +1,5 @@
 import { StripeGateway } from "./infrastructure/egress/adapters/payments/stripe-gateway";
-import { CircuitBreaker } from "./infrastructure/egress/circuit-breaker";
+import { CircuitBreaker } from "./infrastructure/egress/circuit-breaker/circuit-breaker";
 import { createServer } from "./infrastructure/ingress/http/server";
 
 const hostname = process.env.hostname;
