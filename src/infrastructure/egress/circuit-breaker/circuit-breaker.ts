@@ -39,21 +39,35 @@ export class CircuitBreaker {
       );
     }
 
-    if (instance.state === "OPEN") {
-      if (Date.now() >= instance.next_attempt_time) {
-        instance.state = "HALF_OPEN";
-        console.info(
-          "[circuit breaker]: switching to HALF_OPEN. Testing service...",
-        );
-      } else {
-        const remaining = instance.next_attempt_time - Date.now();
-        console.warn(
-          `[circuit breaker]: fast-fail. Circuit OPEN, retry in ${remaining}ms`,
-        );
+    if (instance.state !== "CLOSED") {
+      // Only the request that flips OPEN -> HALF_OPEN is let through. Whoever
+      // finds the circuit already half open is arriving behind a probe that is
+      // still in flight, and gets turned away: a service that is coming back
+      // deserves one caller asking how it feels, not the whole queue at once
+      const isProbe =
+        instance.state === "OPEN" && Date.now() >= instance.next_attempt_time;
+
+      if (!isProbe) {
+        if (instance.state === "HALF_OPEN") {
+          console.warn(
+            "[circuit breaker]: fast-fail. A probe is already in flight",
+          );
+        } else {
+          const remaining = instance.next_attempt_time - Date.now();
+          console.warn(
+            `[circuit breaker]: fast-fail. Circuit OPEN, retry in ${remaining}ms`,
+          );
+        }
+
         throw new Error(
-          "[circuit breaker]: fast-fail triggered. Circuit is OPEN (Cooling down).",
+          "[circuit breaker]: fast-fail triggered. Circuit is not accepting traffic.",
         );
       }
+
+      instance.state = "HALF_OPEN";
+      console.info(
+        "[circuit breaker]: switching to HALF_OPEN. Testing service...",
+      );
     }
 
     const started_at = Date.now();
@@ -107,6 +121,11 @@ export class CircuitBreaker {
     console.warn(
       `[circuit breaker]: Request failed. Failure count: ${this.failure_count}/${this.failure_threshold}`,
     );
+
+    // A failure landing on an already open circuit is stale news: the call was
+    // in flight when the circuit tripped. Acting on it would push the next
+    // attempt further away every time, and under load the cooldown never ends
+    if (this.state === "OPEN") return;
 
     if (
       this.state === "HALF_OPEN" ||

@@ -13,6 +13,19 @@ const succeeding = () => Promise.resolve("charged");
 const failing = () => Promise.reject(new Error("gateway down"));
 const hanging = () => new Promise<never>(() => {});
 
+// A call the test settles by hand, to hold requests in flight on purpose
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: Error) => void;
+
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  return { promise, resolve, reject };
+}
+
 // Burns enough failures to trip the breaker from CLOSED into OPEN.
 async function tripCircuit(failures: number = FAILURE_THRESHOLD) {
   for (let i = 0; i < failures; i++) {
@@ -170,6 +183,97 @@ describe("open circuit", () => {
     await expect(CircuitBreaker.execute(succeeding)).rejects.toThrow(
       "fast-fail",
     );
+  });
+
+  it("allows a new probe once the restarted cooldown elapses", async () => {
+    vi.advanceTimersByTime(RECOVERY_TIMEOUT);
+    await expect(CircuitBreaker.execute(failing)).rejects.toThrow();
+
+    // A failed probe must not lock the circuit shut forever
+    vi.advanceTimersByTime(RECOVERY_TIMEOUT);
+
+    await expect(CircuitBreaker.execute(succeeding)).resolves.toBe("charged");
+    expect(breaker().state).toBe("CLOSED");
+  });
+});
+
+describe("half open circuit", () => {
+  beforeEach(async () => {
+    CircuitBreaker.init();
+    await tripCircuit();
+    vi.advanceTimersByTime(RECOVERY_TIMEOUT);
+  });
+
+  it("lets a single probe through and turns the rest away", async () => {
+    const probe = deferred<string>();
+    const apiCall = vi.fn(() => probe.promise);
+
+    // Everything fires before the probe settles, so they all find HALF_OPEN
+    const first = CircuitBreaker.execute(apiCall);
+    const queued = [
+      CircuitBreaker.execute(apiCall),
+      CircuitBreaker.execute(apiCall),
+      CircuitBreaker.execute(apiCall),
+    ];
+
+    await Promise.all(
+      queued.map((call) => expect(call).rejects.toThrow("fast-fail")),
+    );
+
+    // The recovering service saw one caller, not four
+    expect(apiCall).toHaveBeenCalledTimes(1);
+
+    probe.resolve("charged");
+
+    await expect(first).resolves.toBe("charged");
+    expect(breaker().state).toBe("CLOSED");
+  });
+
+  it("reopens for the queue when the probe fails", async () => {
+    const probe = deferred<string>();
+    const first = CircuitBreaker.execute(() => probe.promise);
+    const queued = CircuitBreaker.execute(succeeding);
+
+    await expect(queued).rejects.toThrow("fast-fail");
+
+    probe.reject(new Error("still down"));
+
+    await expect(first).rejects.toThrow("still down");
+    expect(breaker().state).toBe("OPEN");
+  });
+});
+
+describe("stale failures", () => {
+  beforeEach(() => CircuitBreaker.init());
+
+  it("ignores a failure that lands after the circuit already opened", async () => {
+    // One more call in flight than it takes to trip the circuit
+    const calls = Array.from({ length: FAILURE_THRESHOLD + 1 }, () =>
+      deferred<string>(),
+    );
+
+    const running = calls.map((call) =>
+      expect(CircuitBreaker.execute(() => call.promise)).rejects.toThrow(),
+    );
+
+    // The first five trip it; the last one is still out there
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) {
+      calls[i].reject(new Error("gateway down"));
+    }
+
+    await Promise.all(running.slice(0, FAILURE_THRESHOLD));
+    expect(breaker().state).toBe("OPEN");
+
+    // The straggler comes back mid-cooldown. It must not push the next attempt
+    vi.advanceTimersByTime(5_000);
+    calls[FAILURE_THRESHOLD].reject(new Error("gateway down"));
+    await running[FAILURE_THRESHOLD];
+
+    // Still the original cooldown, counted from when the circuit opened
+    vi.advanceTimersByTime(RECOVERY_TIMEOUT - 5_000);
+
+    await expect(CircuitBreaker.execute(succeeding)).resolves.toBe("charged");
+    expect(breaker().state).toBe("CLOSED");
   });
 });
 

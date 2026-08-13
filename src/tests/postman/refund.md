@@ -125,4 +125,23 @@ Ojo con la diferencia de estatus respecto de `/charge`: acá un `402` no es solo
 
 ## Los dos 503
 
-Iguales a los de `/charge`: el procesador que no contesta (el gateway tira y el detalle queda en la consola) y el breaker en `OPEN`. Ninguno de los dos es alcanzable desde Postman todavía.
+Los mismos que en [charge.md](./charge.md#los-dos-503): el procesador que no contesta y el breaker cortando el paso. Pero se alcanzan distinto.
+
+**El procesador caído no lo podés forzar desde acá.** Las tarjetas mágicas viven en el `last4`, y un refund no manda tarjeta: el procesador resuelve todo desde el cobro original. `/refund` no tiene hoy ningún body que lo haga contestar 5xx.
+
+**El breaker en `OPEN`, en cambio, sí lo vas a ver** — y es el caso más interesante de los dos:
+
+1. Abrí el circuito desde `/charge`, mandando cinco veces con `"last4": "0500"` ([paso a paso](./charge.md#probar-el-circuit-breaker)).
+2. Sin tocar nada más, mandá un `/refund` **perfectamente válido**, con un `payment_id` que exista.
+
+Te vuelve `503` instantáneo:
+
+```
+[circuit breaker]: fast-fail. Circuit OPEN, retry in 12044ms
+```
+
+Nunca se intentó el refund. Lo tumbaron los cobros.
+
+Eso pasa porque **hay un solo breaker para todo el proceso**: `CircuitBreaker.execute` es estático sobre una única instancia en `globalThis`, así que `/charge` y `/refund` comparten estado. Con un solo procesador detrás es hasta razonable — si Stripe se cayó, se cayó para los dos. Deja de serlo apenas haya un segundo proveedor: los fallos de uno te van a cortar el tráfico del otro. El día que pase, esto se resuelve con una instancia por dependencia en vez de una global.
+
+Los 15 segundos de cooldown corren igual, así que después de esperarlos el refund vuelve a pasar sin que tengas que tocar `/charge` de nuevo.

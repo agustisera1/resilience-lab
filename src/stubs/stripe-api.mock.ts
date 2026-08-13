@@ -102,8 +102,15 @@ const FEE_RATE = 0.029;
 const FEE_FIXED = 30;
 const PAYOUT_DELAY = 60 * 60 * 24 * 2;
 
-// Test card: any card ending in 0002 gets declined, like Stripe's magic numbers
+// Test cards, like Stripe's magic numbers. The first one is an answer from the
+// processor; the other two are the absence of one, which is what the circuit
+// breaker exists to notice: a decline is a result, an outage is a failure.
 const DECLINED_LAST4 = "0002";
+const OUTAGE_LAST4 = "0500";
+const SLOW_LAST4 = "0001";
+
+// Longer than the breaker's timeout_period, so the race is never close
+const SLOW_DELAY = 30_000;
 
 // A refund needs to know the charge it is undoing: its currency, and how much
 // of it is still there. Lives as long as the process, which is enough for a stub
@@ -142,9 +149,22 @@ class Stripe {
     const unavailable = this.check();
     if (unavailable) return unavailable;
 
-    await delay();
-
     const body = request as Partial<StripeChargeRequest> | null;
+    const last4 = body?.card?.last4;
+
+    // No body and no error shape: the processor did not answer at all. The
+    // adapter turns any 5xx into a throw, and that throw is what the breaker
+    // counts. Checked before the delay: an outage does not make you wait.
+    if (last4 === OUTAGE_LAST4) {
+      return new Response(undefined, {
+        status: 503,
+        statusText: "Service unavailable",
+        headers,
+      });
+    }
+
+    // Answers, but too late to be worth anything: the breaker gives up first
+    await delay(last4 === SLOW_LAST4 ? SLOW_DELAY : undefined);
 
     if (
       typeof body?.amount !== "number" ||
