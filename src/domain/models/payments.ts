@@ -26,6 +26,8 @@ export type PaymentFailure = {
 
 // The intent: only what the caller owns. Everything the processor decides
 // (its id, the fee, the status, the timestamps) is absent on purpose.
+// description and metadata are passthrough: they travel to the processor and
+// are not columns, because nothing in either flow reads them back.
 export type ChargeIntent = {
   idempotency_key: string;
   customer_id: string;
@@ -42,17 +44,15 @@ export type Payment = {
   // Assigned by the processor, null while the charge is still in flight
   processor_payment_id: string | null;
   customer_id: string;
-  description: string | null;
   currency: Currency;
   method: PaymentMethod;
   status: PaymentStatus;
   failure: PaymentFailure | null;
   amount: string;
-  fee: string;
-  // net = amount - fee
-  net: string;
+  // Null until the processor answers: the fee is its decision, not ours.
+  // net is not stored, it is amount - fee.
+  fee: string | null;
   created_at: string;
-  metadata?: Record<string, string>;
 };
 
 // What the gateway reports back from a charge attempt. A decline is a result,
@@ -66,7 +66,7 @@ export type ChargeResult =
       currency: Currency;
       amount: string;
       fee: string;
-      // net = amount - fee
+      // Reported by the processor, not stored: net = amount - fee.
       net: string;
       created_at: string;
     }
@@ -84,8 +84,39 @@ export type RefundIntent = {
   payment_id: string;
   // null means the whole refundable balance
   amount: string | null;
+  // Passthrough, like on ChargeIntent: forwarded, not stored.
   reason: string | null;
   metadata?: Record<string, string>;
+};
+
+// The message the outbox stores whole and the gateway forwards. Built once, in
+// the request, out of the intent plus the payment it points at: after that
+// nobody reads `payments` again to dispatch it.
+//
+// It is not the refunds row. This is what the processor needs to hear
+// (it knows the payment by processor_payment_id, never by payment_id); the row
+// is what we need to remember.
+export type RefundJob = {
+  // Ours, and not part of the request: the worker needs it to close the row.
+  id: string;
+  idempotency_key: string;
+  processor_payment_id: string;
+  amount: string;
+  currency: Currency;
+};
+
+// The refunds row: what happened, not what to send. The currency lives on the
+// payment and is not copied back here.
+export type Refund = {
+  id: string;
+  idempotency_key: string;
+  payment_id: string;
+  // Null until the worker gets an answer.
+  processor_refund_id: string | null;
+  amount: string;
+  status: PaymentStatus;
+  failure: PaymentFailure | null;
+  created_at: string;
 };
 
 // Same shape of contract as ChargeResult: a rejected refund is a result, not
